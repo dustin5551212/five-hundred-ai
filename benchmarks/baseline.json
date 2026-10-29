@@ -1,0 +1,71 @@
+{
+  "seed": 7,
+  "results": [
+    {
+      "label": "heuristic (A) vs random (B)",
+      "a": "heuristic",
+      "b": "random",
+      "deals": 2000,
+      "a_tricks": 5.7805,
+      "b_tricks": 4.2195,
+      "diff": 1.561,
+      "ci95": [
+        1.4985,
+        1.6245
+      ],
+      "a_win_rate": 0.5755,
+      "tie_rate": 0.1905,
+      "by_contract": {
+        "C": 1.515,
+        "D": 1.4875,
+        "H": 1.6575,
+        "S": 1.45,
+        "NT": 1.695
+      }
+    },
+    {
+      "label": "heuristic (A) vs lowest-card (B)",
+      "a": "heuristic",
+      "b": "lowest",
+      "deals": 2000,
+      "a_tricks": 5.93875,
+      "b_tricks": 4.06125,
+      "diff": 1.8774999999999995,
+      "ci95": [
+        1.8185,
+        1.9375
+      ],
+      "a_win_rate": 0.629,
+      "tie_rate": 0.1755,
+      "by_contract": {
+        "C": 1.9025,
+        "D": 1.835,
+        "H": 1.9225,
+        "S": 1.825,
+        "NT": 1.9025
+      }
+    },
+    {
+      "label": "heuristic (A) vs heuristic (B)",
+      "a": "heuristic",
+      "b": "heuristic",
+      "deals": 2000,
+      "a_tricks": 5.0,
+      "b_tricks": 5.0,
+      "diff": 0.0,
+      "ci95": [
+        0.0,
+        0.0
+      ],
+      "a_win_rate": 0.3995,
+      "tie_rate": 0.215,
+      "by_contract": {
+        "C": 0.0,
+        "D": 0.0,
+        "H": 0.0,
+        "S": 0.0,
+        "NT": 0.0
+      }
+    }
+  ]
+}

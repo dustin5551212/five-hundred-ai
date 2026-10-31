@@ -182,8 +182,8 @@ src/fivehundred/search.py     PIMC: sampled worlds, common random numbers, rollo
 src/fivehundred/benchmark.py  paired head-to-head with bootstrap intervals
 scripts/diagnose_bc.py        where the cloned policy disagrees with its teacher, by decision type
 scripts/dump_js_parity.mjs    asks the browser game the same questions, for the parity fixture
-tests/                        92 tests — rules, bidding, auction, scoring, a whole match, the bidding
-                              benchmark's own harness, search, and the parity suite
+tests/                        100 tests — rules, bidding, auction, scoring, a whole match, the bidding
+                              benchmark and its defence harness, search, and the parity suite
 ```
 
 ## Is the CPU any good at *bidding*?
@@ -225,6 +225,11 @@ work. But it **underbids**: removing its safety margin is worth another +4 point
 it bid one trick higher is worth **+18 points a hand** in contract value and **+25 at a real table**.
 Both intervals clear zero, on 2,000 deals.
 
+One caveat that turned into the next section: in every number above, the *defence* is the shipped
+heuristic — a side that plays each trick on its own merits and does not go looking for a contract to
+break. Seating a defence that searches changes the answer for the aggressive arm, so read the +25
+with the retune below.
+
 Two caveats, because the first draft of this section overstated it. The aggressive arms bid far more
 often (83.5% of contracts held against 42%) and concede far more to the defenders (25.3 points a hand
 against 6.2); the net column still favours them, but the edge is "bid more, and mostly make it",
@@ -233,6 +238,59 @@ overbidding — which the shipped heuristic does not try to do — would eat int
 
 `python -m fivehundred.bidbench --deals 2000 --json benchmarks/bidding.json` reproduces every number
 above in about 27 seconds.
+
+## Does the margin survive a defence that tries?
+
+Every number above was measured against the shipped heuristic defending — a side that plays each trick
+on its own merits and never goes looking for a contract to break. That flatters overbidding, so the
+same sweep was run twice: once against that defence, once against the searcher from `search.py`
+(`PIMCAgent`, 12 sampled worlds) seated at the defending side. The contractor's own side stays on the
+shipped heuristic, so the bidder is still the only thing being measured — only the quality of the
+opposition changes.
+
+250 deals, seed 21, both defences on the identical deals, and the same search seed per deal for every
+arm, so the difference between arms is the bid and nothing else:
+
+| safety margin | points/hand, weak defence | points/hand, searching defence | vs shipped (searching) | 95% CI | made w/s | passed |
+|---|---|---|---|---|---|---|
+| +0.6 (very timid) | +11.96 | +11.48 | −8.80 | [−13.32, −4.76] | 100 / 97% | 86.4% |
+| **+0.2 (shipped)** | +22.24 | +20.28 | — | — | 94 / 93% | 72.0% |
+| 0.0 | +25.72 | +24.24 | **+3.96** | [+0.80, +7.32] | 90 / 89% | 64.0% |
+| −0.5 | +32.12 | +30.96 | **+10.68** | [+5.68, +15.76] | 83 / 83% | 43.2% |
+| −1.0 (one trick higher) | +35.44 | +32.36 | **+12.08** | [+5.52, +18.96] | 78 / 76% | 23.2% |
+| −1.5 | +35.96 | +31.60 | +11.32 | [+3.40, +19.32] | 73 / 70% | 7.6% |
+
+And at a real table, both sides' points counted, with the searcher defending:
+
+| matchup | A − B, searching defence | 95% CI | A − B, heuristic defence (for contrast) |
+|---|---|---|---|
+| shipped vs shipped (control) | 0.00 | exactly 0 | 0.00 |
+| no safety margin vs shipped | **+3.68** | [−2.08, +9.16] | +6.40 [+4.11, +8.72] |
+| one trick higher vs shipped | **−7.24** | [−29.08, +14.48] | +25.30 [+18.21, +32.05] |
+
+**What survives, and what doesn't.** The searching defence costs every arm points, and it costs the
+aggressive ones more (−0.5 at the timid end, −4.4 at the far end) — the shape you would expect if the
+defence is doing its job. Two claims come out of the retune with different verdicts:
+
+- **"Remove the safety margin" survives.** Bidding at the edge is worth **+3.96** a hand in contract
+  value with the interval clear of zero, and **+10.68** if you take the −0.5 setting, which is the
+  best arm on both defences. At a real table the edge shrinks to +3.68 and its interval now includes
+  zero — real, but no longer certain.
+- **"Bid a trick higher" does not.** Against the heuristic defence it looked worth **+25.30** a hand
+  at the table; against a defence that searches it is **−7.24**, interval spanning zero. That arm was
+  not finding better contracts, it was farming a defence that does not fight, and 83% of the hands it
+  won the auction for were hands it then had to make.
+
+So the honest version of the first finding is narrower than "the CPU underbids by a trick": it
+**bids too little, and the fix is to bid at the edge rather than a level higher**. The gap between
+the shipped margin and the best arm is about **10 points a hand when you are the side choosing the
+contract**, and about **4 points at a table, against a defence of this strength** — inside the noise
+at 250 deals.
+
+Caveats worth keeping: 250 deals rather than 2,000, because the searcher costs ~120 ms a hand; PIMC-12
+is a competent defender but its rollouts still use the shipped heuristic as the base policy; and it
+defends every hand, which a real pair would not manage for a whole session. The sweep reproduces with
+`python -m fivehundred.bidbench --sweep --sweep-deals 250 --json benchmarks/bidding-sweep.json`.
 
 ## Is it the same game? Two proofs, not a promise
 

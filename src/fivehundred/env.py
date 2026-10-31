@@ -4,9 +4,11 @@
     Play runs clockwise: S -> W -> N -> E.
 
 Scope, stated plainly: this module plays the cards after the contract is
-settled. The auction, the kitty exchange and the partner's gift are not here
-yet — see the README's roadmap. Nothing in the scoring benchmark depends on
-them, because every comparison is tricks taken against tricks taken.
+settled. Everything around it now exists too — `bid.py` for the contract,
+`auction.py` for the bidding round, `game.py` for the kitty and the match — so a
+whole hand of 500 can be played without a browser. What is still missing is a
+*bidding* opponent worth measuring; the shipped CPU's `choose_bid` is ported, but
+no benchmark compares bidders yet.
 """
 
 from __future__ import annotations
@@ -15,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import Protocol, Sequence
 
 from .cards import Card
-from .rules import NULLO, effective_suit, legal_plays, trick_winner
+from .rules import NULLO, effective_suit, is_nullo, legal_plays, trick_winner
 
 SEATS: tuple[str, ...] = ("S", "W", "N", "E")
 TEAM_OF: dict[str, str] = {"S": "NS", "N": "NS", "W": "WE", "E": "WE"}
@@ -63,7 +65,7 @@ def play_order(contract: str, contractor: str) -> list[str]:
     """Clockwise from the contractor; the Nullo partner sits the hand out."""
     start = SEATS.index(contractor)
     order = [SEATS[(start + i) % 4] for i in range(4)]
-    if contract == NULLO:
+    if is_nullo(contract):
         order = [seat for seat in order if seat != PARTNER_OF[contractor]]
     return order
 

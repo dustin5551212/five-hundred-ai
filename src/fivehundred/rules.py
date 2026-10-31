@@ -22,7 +22,8 @@ from .cards import Card, JOKER_VALUE
 SUIT_DENOMS: tuple[str, ...] = ("C", "D", "H", "S")
 NT = "NT"
 NULLO = "NULLO"
-DENOMS: tuple[str, ...] = SUIT_DENOMS + (NT, NULLO)
+OPEN_NULLO = "OPEN_NULLO"
+DENOMS: tuple[str, ...] = SUIT_DENOMS + (NT, NULLO, OPEN_NULLO)
 
 # Suit of the same colour — the left-bower suit.
 SAME_COLOUR: dict[str, str] = {"C": "S", "S": "C", "D": "H", "H": "D"}
@@ -41,11 +42,12 @@ NOMINATED_JOKER_STRENGTH = 99
 
 
 def is_no_trump(denom: str) -> bool:
-    return denom in (NT, NULLO)
+    return denom in (NT, NULLO, OPEN_NULLO)
 
 
 def is_nullo(denom: str) -> bool:
-    return denom == NULLO
+    """Both nullo contracts are played to lose every trick, so both count."""
+    return denom in (NULLO, OPEN_NULLO)
 
 
 def joker_mode(denom: str, joker_suit: str | None = None) -> str:

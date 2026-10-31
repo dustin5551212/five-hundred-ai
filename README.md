@@ -1,8 +1,11 @@
 # Five Hundred AI
 
-A Python implementation of the play phase of **500** — the 45-card trick-taking game — with a
-benchmark harness and three agents to measure: a learned policy, a searcher, and the hand-tuned CPU
-from my browser game.
+A Python implementation of **500** — the 45-card trick-taking game — with a benchmark harness and
+three agents to measure: a learned policy, a searcher, and the hand-tuned CPU from my browser game.
+
+The game itself is complete: deal, auction, kitty exchange, ten tricks, contract scoring and a match
+to 500 points. `python -m fivehundred --seed 7` plays one out at the terminal. What is *not* yet
+measured is bidding — the benchmark still compares agents on tricks taken, with the contract fixed.
 
 This is the companion to [professional-500](https://github.com/dustin5551212/professional-500)
 (zero dependencies, 112 tests, 4-player networked). That game ships a rule-based opponent in
@@ -162,6 +165,10 @@ membership, so training runs as `sg render -c '...'` in any session that predate
 ```
 src/fivehundred/cards.py      Card, the 45-card pack, seeded round-robin deal
 src/fivehundred/rules.py      trump order, bowers, effective suit, legal plays, trick winner
+src/fivehundred/bid.py        contracts, the 27-bid ladder, nullo and open nullo, labels
+src/fivehundred/auction.py    the bidding round: turn order, legality, contract or thrown in
+src/fivehundred/scoring.py    contract made/defeated, slams, nullo, match to 500
+src/fivehundred/game.py       a whole hand (kitty exchange included) and a whole match
 src/fivehundred/env.py        play-phase simulator; resumable mid-trick
 src/fivehundred/agents.py     random / lowest-card / the shipped heuristic (ported from cpu.js)
 src/fivehundred/features.py   148-number encoding of a seat's view (no peeking)
@@ -170,8 +177,26 @@ src/fivehundred/train.py      behaviour cloning, then self-play REINFORCE
 src/fivehundred/search.py     PIMC: sampled worlds, common random numbers, rollout
 src/fivehundred/benchmark.py  paired head-to-head with bootstrap intervals
 scripts/diagnose_bc.py        where the cloned policy disagrees with its teacher, by decision type
-tests/                        36 tests — rules, card accounting, resumption, search, controls
+scripts/dump_js_parity.mjs    asks the browser game the same questions, for the parity fixture
+tests/                        81 tests — rules, bidding, auction, scoring, a whole match, search,
+                              and the parity suite
 ```
+
+## Is it the same game? Two proofs, not a promise
+
+**The parity fixture.** `scripts/dump_js_parity.mjs` imports the browser game's own `bid.js`,
+`auction.js` and `scoring.js` and answers 27 bids, eight legal-bid ladders, six scripted auctions,
+594 scoring cases and eight match-end cases into `tests/fixtures/js_parity.json`. `tests/test_parity.py`
+replays every one of those questions against the Python modules and demands identical answers. It is
+committed, so `pytest` needs neither node nor the other repo; regenerate it if the JS rules change.
+If that suite fails, the Python engine and the game people actually play have drifted apart.
+
+**A whole match, end to end.** `tests/test_game.py` plays matches to 500 with four seats of the
+shipped CPU: 45 cards dealt, ten each and a five-card kitty, the contractor back down to ten, ten
+tricks, the contract scored, the dealer rotating. The tests assert the card accounting (45 in, 45
+out, never a duplicate), that a passing table throws the hand in, that a Nullo contractor gets the
+partner's lowest card, and that the scorecard equals the sum of its hands — which is the check that
+the join did not double-count.
 
 ## Roadmap
 
@@ -180,7 +205,9 @@ tests/                        36 tests — rules, card accounting, resumption, s
    progress.
 2. **Search with a learned prior** — let the policy bias world sampling and rollout choices, cutting
    the worlds needed for the same strength. That is where learning and search stop competing.
-3. **Auction + kitty** — 15 cards to the contractor, six discards, bid legality. Then contracts are
-   chosen rather than sampled, which makes the benchmark a game rather than a puzzle.
+3. ~~**Auction + kitty**~~ — done: `bid.py`, `auction.py`, `game.py`. What remains is a *benchmark*
+   for bidding: the shipped CPU's `choose_bid` is ported and a whole match runs, but no paired
+   comparison yet says whether it is any good at choosing contracts, the way the play benchmark says
+   what it is worth at choosing cards.
 4. **Ship it** — export a policy and give it a seat in the browser game, so the agent is playable at
    the table instead of a row in a table.

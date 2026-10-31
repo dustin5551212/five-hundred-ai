@@ -24,7 +24,13 @@ PARTNER_OF: dict[str, str] = {"S": "N", "N": "S", "W": "E", "E": "W"}
 
 @dataclass(frozen=True, slots=True)
 class View:
-    """What a seat knows when it is its turn. Everything else stays hidden."""
+    """What a seat knows when it is its turn.
+
+    Public information only beyond the hand: every card played so far, the
+    trick in progress, the score, and who holds the contract. A seat never sees
+    another seat's hand, which is what makes this a game of imperfect
+    information rather than a puzzle.
+    """
 
     hand: tuple[Card, ...]
     legal: tuple[Card, ...]
@@ -33,6 +39,9 @@ class View:
     contract: str
     seat: str
     joker_suit: str | None
+    played: tuple[tuple[str, Card], ...] = ()   # every card played this hand
+    tricks: tuple[tuple[str, int], ...] = ()    # (team, tricks) so far
+    contractor: str = ""
 
 
 class Agent(Protocol):
@@ -65,22 +74,48 @@ def play_hand(
     contractor: str,
     agents: dict[str, Agent],
     joker_suit: str | None = None,
+    trick: Sequence[tuple[str, Card]] | None = None,
+    tricks: dict[str, int] | None = None,
+    log: Sequence[tuple[str, Card]] | None = None,
 ) -> Outcome:
-    """Play one hand out and return the tricks each side took."""
+    """Play one hand out and return the tricks each side took.
+
+    `trick`, `tricks` and `log` exist so a hand can be **resumed mid-trick**
+    from a position reached elsewhere — which is what search needs: put a
+    candidate card on the table, then play the rest out with a base policy and
+    see what the hand was worth. Left empty, it deals with a fresh hand led by
+    the contractor.
+    """
     remaining: dict[str, list[Card]] = {seat: list(cards) for seat, cards in hands.items()}
     order = play_order(contract, contractor)
     trick_size = len(order)
-    tricks = {"NS": 0, "WE": 0}
-    log: list[tuple[str, Card]] = []
+    totals = {"NS": 0, "WE": 0} if tricks is None else {k: int(v) for k, v in tricks.items()}
+    played_log: list[tuple[str, Card]] = list(log or ())
+    current: list[tuple[str, Card]] = list(trick or ())
 
-    leader = contractor
-    while any(remaining[seat] for seat in order):
-        idx = order.index(leader)
-        play_order_this_trick = (order[idx:] + order[:idx])[:trick_size]
+    leader = order[0]  # the contractor, for a fresh hand
+    if current:
+        leader = current[0][0]
+    elif played_log:
+        # Resuming on a trick boundary: whoever took the last completed trick leads.
+        tail = played_log[-trick_size:]
+        led = effective_suit(tail[0][1], contract, joker_suit)
+        leader = tail[trick_winner(tail, contract, led, joker_suit)][0]
 
-        trick: list[tuple[str, Card]] = []
-        led_suit: str | None = None
-        for seat in play_order_this_trick:
+    while current or any(remaining[seat] for seat in order):
+        if current:
+            # Resume: the seats still to play in this trick follow the last player.
+            start = order.index(current[-1][0])
+            seats = (order[start + 1:] + order[: start + 1])[: trick_size - len(current)]
+        else:
+            start = order.index(leader)
+            seats = (order[start:] + order[:start])[:trick_size]
+
+        led_suit: str | None = (
+            effective_suit(current[0][1], contract, joker_suit) if current else None
+        )
+
+        for seat in seats:
             hand = remaining[seat]
             if not hand:
                 raise RuntimeError(f"{seat} was asked to play with no cards left")
@@ -88,11 +123,14 @@ def play_hand(
             view = View(
                 hand=tuple(hand),
                 legal=tuple(legal),
-                trick=tuple(trick),
+                trick=tuple(current),
                 led_suit=led_suit,
                 contract=contract,
                 seat=seat,
                 joker_suit=joker_suit,
+                played=tuple(played_log),
+                tricks=tuple(totals.items()),
+                contractor=contractor,
             )
             card = agents[seat].choose(view)
             if card not in legal:
@@ -100,12 +138,17 @@ def play_hand(
             hand.remove(card)
             if led_suit is None:
                 led_suit = effective_suit(card, contract, joker_suit)
-            trick.append((seat, card))
-            log.append((seat, card))
+            current.append((seat, card))
+            played_log.append((seat, card))
 
-        winner_idx = trick_winner(trick, contract, led_suit, joker_suit)
-        leader = trick[winner_idx][0]
-        tricks[TEAM_OF[leader]] += 1
+        winner_idx = trick_winner(current, contract, led_suit, joker_suit)
+        leader = current[winner_idx][0]
+        totals[TEAM_OF[leader]] += 1
+        current = []
 
     contractor_team = TEAM_OF[contractor]
-    return Outcome(tricks=tricks, tricks_by_contractor=tricks[contractor_team], plays=tuple(log))
+    return Outcome(
+        tricks=totals,
+        tricks_by_contractor=totals[contractor_team],
+        plays=tuple(played_log),
+    )

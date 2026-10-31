@@ -52,13 +52,22 @@ class Result:
     by_contract: dict[str, float] = field(default_factory=dict)  # denom -> a - b
 
 
-def _agent(kind: str, rng: random.Random) -> Agent:
+def _agent(kind: str, rng: random.Random, device: str = "cpu") -> Agent:
     if kind == "random":
         return RandomAgent(rng)
     if kind == "lowest":
         return LowestAgent()
     if kind == "heuristic":
         return HeuristicAgent()
+    if kind.startswith("learned:"):
+        from .policy import LearnedAgent, load
+
+        return LearnedAgent(load(kind.split(":", 1)[1], device), device=device, sample=False)
+    if kind.startswith("pimc"):
+        from .search import PIMCAgent
+
+        worlds = int(kind.split(":", 1)[1]) if ":" in kind else 10
+        return PIMCAgent(worlds=worlds, seed=rng.randrange(1 << 30))
     raise ValueError(f"unknown agent kind: {kind}")
 
 

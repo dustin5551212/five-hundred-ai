@@ -4,8 +4,8 @@ A Python implementation of **500** — the 45-card trick-taking game — with a 
 three agents to measure: a learned policy, a searcher, and the hand-tuned CPU from my browser game.
 
 The game itself is complete: deal, auction, kitty exchange, ten tricks, contract scoring and a match
-to 500 points. `python -m fivehundred --seed 7` plays one out at the terminal. What is *not* yet
-measured is bidding — the benchmark still compares agents on tricks taken, with the contract fixed.
+to 500 points. `python -m fivehundred --seed 7` plays one out at the terminal. Both halves are
+measured too — card play in tricks, and bidding in points (see *Is the CPU any good at bidding?*).
 
 This is the companion to [professional-500](https://github.com/dustin5551212/professional-500)
 (zero dependencies, 112 tests, 4-player networked). That game ships a rule-based opponent in
@@ -15,6 +15,10 @@ This is the companion to [professional-500](https://github.com/dustin5551212/pro
 
 The shipped heuristic is worth **+1.56 tricks a hand over random play**. Search beats it by
 **+0.98**. The learned policy, on its own, does not beat it yet.
+
+Its *bidding* is worth **+17 points a hand over never bidding**, and it beats a no-judgement 6♠
+bidder by **+60 points a hand at a real table** — but it **underbids**, and letting it bid one trick
+higher is worth another **+18** (contract value) or **+25** (at the table), on 2,000 paired deals.
 
 | agent | vs heuristic (tricks/hand) | 95% CI | deals | what it is |
 |---|---|---|---|---|
@@ -178,9 +182,57 @@ src/fivehundred/search.py     PIMC: sampled worlds, common random numbers, rollo
 src/fivehundred/benchmark.py  paired head-to-head with bootstrap intervals
 scripts/diagnose_bc.py        where the cloned policy disagrees with its teacher, by decision type
 scripts/dump_js_parity.mjs    asks the browser game the same questions, for the parity fixture
-tests/                        81 tests — rules, bidding, auction, scoring, a whole match, search,
-                              and the parity suite
+tests/                        92 tests — rules, bidding, auction, scoring, a whole match, the bidding
+                              benchmark's own harness, search, and the parity suite
 ```
+
+## Is the CPU any good at *bidding*?
+
+The play benchmark measures card play with the contract fixed. That leaves the other half of the
+game unmeasured, so `bidbench.py` measures it — two ways, both paired by deal, both with card play
+held fixed at the shipped heuristic so the only variable is the auction.
+
+**Contract value**: every bidder is shown the same hand, picks a contract, and plays it out. Reported
+as points per hand for the bidding side, with the difference against the shipped bidder and a
+bootstrap interval over the 2,000 deals (seed 21).
+
+| bidder | points/hand | 95% CI | vs shipped | 95% CI | conceded | made | passed |
+|---|---|---|---|---|---|---|---|
+| pass (never bids) | 0.00 | — | −17.12 | [−19.13, −15.15] | 0.00 | — | 100% |
+| always 6♠, no judgement | +7.75 | [+5.58, +9.92] | −9.38 | [−11.97, −6.77] | 42.28 | 55.4% | 0% |
+| **shipped CPU** | **+17.12** | [+15.10, +19.23] | — | — | 6.22 | 87.8% | 74.9% |
+| shipped, safety margin removed | +21.27 | [+19.09, +23.43] | +4.14 | [+3.13, +5.19] | 8.34 | 86.9% | 67.9% |
+| shipped, bids one trick higher | +35.22 | [+32.24, +38.09] | +18.09 | [+15.68, +20.59] | 25.29 | 77.2% | 22.1% |
+
+**The auction**: two systems sit opposite each other, and each deal is played twice with the systems
+swapping sides, so what differs is only who sits where. This counts *both* sides' points, which is
+what a match actually does — a bid you fail pays the defenders ten a trick.
+
+| matchup | A pts/hand | B pts/hand | A − B | 95% CI | A held the contract |
+|---|---|---|---|---|---|
+| shipped vs pass | +67.33 | +24.67 | **+42.66** | [+39.09, +46.11] | 49.9% |
+| shipped vs always 6♠ | +105.97 | +45.72 | **+60.25** | [+55.94, +64.17] | 47.3% |
+| shipped vs shipped (control) | +81.80 | +81.80 | 0.00 | exactly 0 | 42.0% |
+| no safety margin vs shipped | +90.72 | +84.32 | **+6.40** | [+4.11, +8.72] | 50.7% |
+| one trick higher vs shipped | +111.05 | +85.75 | **+25.30** | [+18.21, +32.05] | 83.5% |
+
+The control row is the harness's own honesty check: identical bidders, sides swapped, must come out
+at exactly zero. If it ever doesn't, none of the other rows mean anything.
+
+**What the numbers say.** The shipped bidder is worth about **+17 points a hand over never bidding**,
+and at a real table it beats a no-judgement 6♠ bidder by **+60 points a hand** — so it is doing real
+work. But it **underbids**: removing its safety margin is worth another +4 points a hand, and letting
+it bid one trick higher is worth **+18 points a hand** in contract value and **+25 at a real table**.
+Both intervals clear zero, on 2,000 deals.
+
+Two caveats, because the first draft of this section overstated it. The aggressive arms bid far more
+often (83.5% of contracts held against 42%) and concede far more to the defenders (25.3 points a hand
+against 6.2); the net column still favours them, but the edge is "bid more, and mostly make it",
+not a better auction by any subtle measure. And card play is held fixed, so a defence that punishes
+overbidding — which the shipped heuristic does not try to do — would eat into that margin.
+
+`python -m fivehundred.bidbench --deals 2000 --json benchmarks/bidding.json` reproduces every number
+above in about 27 seconds.
 
 ## Is it the same game? Two proofs, not a promise
 
@@ -205,9 +257,7 @@ the join did not double-count.
    progress.
 2. **Search with a learned prior** — let the policy bias world sampling and rollout choices, cutting
    the worlds needed for the same strength. That is where learning and search stop competing.
-3. ~~**Auction + kitty**~~ — done: `bid.py`, `auction.py`, `game.py`. What remains is a *benchmark*
-   for bidding: the shipped CPU's `choose_bid` is ported and a whole match runs, but no paired
-   comparison yet says whether it is any good at choosing contracts, the way the play benchmark says
-   what it is worth at choosing cards.
+3. ~~**Auction + kitty**~~ — done: `bid.py`, `auction.py`, `game.py`, and `bidbench.py` to measure
+   the result. The benchmark's first finding is that the shipped CPU underbids by about a trick.
 4. **Ship it** — export a policy and give it a seat in the browser game, so the agent is playable at
    the table instead of a row in a table.

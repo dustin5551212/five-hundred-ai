@@ -17,8 +17,8 @@ The shipped heuristic is worth **+1.56 tricks a hand over random play**. Search 
 |---|---|---|---|---|
 | random | −1.56 | ±0.06 | 2,000 | the floor |
 | lowest legal card | −1.88 | ±0.06 | 2,000 | greedy in the wrong direction |
-| behaviour cloning | **−0.58** | [−0.70, −0.47] | 400 | learned; copies the heuristic 88.2% of the time |
-| self-play REINFORCE | **−0.95** | [−1.08, −0.81] | 400 | learned; *worse* than the cloning it started from |
+| behaviour cloning | **−0.45** | [−0.57, −0.34] | 400 | learned; matches the heuristic on 89.9% of held-out decisions |
+| self-play REINFORCE | **−1.04** | [−1.18, −0.90] | 400 | learned; *worse* than the cloning it started from |
 | **PIMC search, 8 worlds** | **+0.49** | [+0.39, +0.59] | 600 | samples the hidden hands, plays each out |
 | **PIMC search, 24 worlds** | **+0.98** | [+0.83, +1.13] | 300 | same, more samples |
 | heuristic vs itself | 0.00 | exactly 0 | 2,000 | the harness's control |
@@ -50,19 +50,41 @@ seats, so each side leads a quarter of the hands. Throughput: ~600 hands/second 
 
 ## The learned policy, honestly
 
-`train.py bc` records the heuristic's decisions over 3,000 deals (120k decisions) and fits a small
-MLP (148 features → 256 → 256 → 45 card logits, illegal cards masked). It reaches **88.2%
-agreement** with the heuristic on held-out deals, and the heuristic's move is in its top 3 **99.6%**
-of the time — so the network does learn the shape of the problem.
+`train.py bc` records the heuristic's decisions over 5,000 deals and fits a small MLP (148 features
+→ 256 → 256 → 45 card logits, illegal cards masked). The validation split is made **by hand**, not
+by decision: decisions inside one hand share cards and opponents, so a decision-level split would
+report accuracy the model does not have on unseen deals. Training agreement and held-out agreement
+are printed side by side for the same reason.
 
-It still plays **0.58 tricks worse**, and that gap is the interesting part: a policy that agrees 88%
-of the time compounds the remaining 12% into positions its teacher never visited. Imitation gives
-you the teacher's moves, not the teacher's judgement.
+Held-out agreement plateaus at **89.9%** while training cross-entropy keeps falling to 0.049 and
+training agreement reaches 93.8%. That gap is memorisation, and it is the reason the headline number
+is the held-out one. More epochs do not help; the first version of this model (12 epochs, 3,000
+hands) sat at 88.2% held out, and the extra training moved it one and a half points.
+
+Disagreement is not spread evenly (`scripts/diagnose_bc.py`):
+
+| decision type | agreement |
+|---|---|
+| **leading** (`n=5,000`) | **80.1%** |
+| following (`n=15,000`) | 92.7% |
+| as contractor | 88.6% |
+| as defender | 89.8% |
+
+Following a suit is nearly solved: the legal set is small and the rule is local. Choosing a **lead**
+is where three quarters of the errors live, because the heuristic's rule — draw trumps with four or
+more, otherwise lead low from the longest suit — depends on the *shape* of the hand, and a flat
+multi-hot encodes which cards are held but not how they combine. That is a feature-engineering
+problem before it is a learning problem, and it is the first thing to fix.
+
+It still plays **0.45 tricks worse** than the teacher it copied, which is the honest cost of
+imitation: a policy that agrees 90% of the time compounds the other 10% into positions its teacher
+never visited.
 
 `train.py selfplay` then takes the north–south seats against the heuristic on west–east and applies
 REINFORCE to the side's trick share with a running baseline. Over 20,000 hands the mean reward
 **did not move** (−0.07 to −0.12, flat), and the resulting policy is **worse than the cloning it
-started from**. That is a negative result and it stays in the table.
+started from** — twice, from two different starting checkpoints (−0.95, then −1.04). That is a
+negative result and it stays in the table.
 
 Diagnosis, so the next attempt is not a guess: one gradient step per hand, with the advantage taken
 against a 0.99-decay baseline, is an extremely noisy estimate. The whole twenty-decision trajectory
@@ -147,6 +169,7 @@ src/fivehundred/policy.py     the MLP, masked logits, and the agent that plays i
 src/fivehundred/train.py      behaviour cloning, then self-play REINFORCE
 src/fivehundred/search.py     PIMC: sampled worlds, common random numbers, rollout
 src/fivehundred/benchmark.py  paired head-to-head with bootstrap intervals
+scripts/diagnose_bc.py        where the cloned policy disagrees with its teacher, by decision type
 tests/                        36 tests — rules, card accounting, resumption, search, controls
 ```
 

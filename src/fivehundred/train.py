@@ -62,27 +62,42 @@ def _tensors(samples: list[tuple[list[float], list[bool], int]], device: str):
     return x, mask, target
 
 
-def collect_behaviour(n_hands: int, seed: int) -> list[tuple[list[float], list[bool], int]]:
+def collect_behaviour(n_hands: int, seed: int) -> list[list[tuple[list[float], list[bool], int]]]:
+    """One sample list per hand, so a validation split can be made by hand.
+
+    Splitting by *decision* would leak: decisions inside one hand are correlated
+    (same cards, same opponents), so a decision-level split reports accuracy the
+    model does not have on unseen deals.
+    """
     rng = random.Random(seed)
-    rec = Recorder()
+    per_hand: list[list[tuple[list[float], list[bool], int]]] = []
     for i in range(n_hands):
+        rec = Recorder()
         hands, _ = deal(rng)
         contract = BENCH_CONTRACTS[i % len(BENCH_CONTRACTS)]
         contractor = SEATS[i % 4]
         play_hand({seat: hands[j] for j, seat in enumerate(SEATS)}, contract, contractor,
                   {seat: rec for seat in SEATS})
-    return rec.samples
+        per_hand.append(rec.samples)
+    return per_hand
 
 
 def train_bc(n_hands: int, epochs: int, out: Path, device: str, seed: int = 1) -> PolicyNet:
     torch.manual_seed(seed)
-    samples = collect_behaviour(n_hands, seed)
-    print(f"behaviour cloning: {len(samples)} decisions from {n_hands} hands")
-    x, mask, target = _tensors(samples, device)
+    per_hand = collect_behaviour(n_hands, seed)
+    n_val = max(1, len(per_hand) // 10)
+    train_samples = [s for hand in per_hand[n_val:] for s in hand]
+    val_samples = [s for hand in per_hand[:n_val] for s in hand]
+    print(f"behaviour cloning: {len(train_samples)} train decisions, "
+          f"{len(val_samples)} held-out from {n_val} unseen hands")
+
+    x, mask, target = _tensors(train_samples, device)
+    vx, vmask, vtarget = _tensors(val_samples, device)
 
     net = PolicyNet().to(device)
     opt = torch.optim.Adam(net.parameters(), lr=1e-3)
-    n = len(samples)
+    n = len(train_samples)
+    best_val, best_state = -1.0, None
     for epoch in range(epochs):
         perm = torch.randperm(n, device=device)
         total = 0.0
@@ -92,8 +107,17 @@ def train_bc(n_hands: int, epochs: int, out: Path, device: str, seed: int = 1) -
             loss = -logp.gather(1, target[idx].unsqueeze(1)).mean()
             opt.zero_grad(); loss.backward(); opt.step()
             total += float(loss.item()) * len(idx)
-        acc = _accuracy(net, x, mask, target)
-        print(f"  epoch {epoch + 1:2d}  ce {total / n:.4f}  agreement with heuristic {100 * acc:.1f}%")
+        val_acc = _accuracy(net, vx, vmask, vtarget)
+        flag = ""
+        if val_acc > best_val:
+            best_val = val_acc
+            best_state = {k: v.detach().clone() for k, v in net.state_dict().items()}
+            flag = "  *"
+        print(f"  epoch {epoch + 1:2d}  train ce {total / n:.4f}  held-out agreement {100 * val_acc:.1f}%{flag}")
+
+    if best_state is not None:
+        net.load_state_dict(best_state)
+    print(f"kept the best epoch: {100 * best_val:.1f}% held-out agreement")
     save(net, out)
     print(f"wrote {out}")
     return net

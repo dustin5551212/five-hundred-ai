@@ -164,6 +164,51 @@ print(run('pimc24', 'pimc:24', 'heuristic', 300, 21))"
 PyTorch picks the GPU up as `cuda:0` under ROCm. On this machine `/dev/kfd` needs `render` group
 membership, so training runs as `sg render -c '...'` in any session that predates the group change.
 
+## Play against it in the browser
+
+The searcher is worth +0.98 tricks a hand over the heuristic, which is more useful at a table than
+in a table. `serve.py` puts it behind HTTP and `professional-500` seats it at the computer chairs:
+
+```sh
+# 1. the agent (stdlib only, no dependencies)
+PYTHONPATH=src .venv/bin/python -m fivehundred.serve --port 5200 --worlds 24
+
+# 2. the table, with the agent in the CPU seats
+#    open http://localhost:5173/?ai=1        (or ?ai=http://host:port)
+```
+
+`GET /health` → `{"ok": true, "agent": "pimc", "worlds": 24}`. `POST /move` takes one view and
+returns one card id:
+
+```jsonc
+{"view": {"seat": "N", "contract": "S", "contractor": "W", "joker_suit": null,
+          "hand": ["H-Q", "S-4"], "legal": ["H-Q", "S-4"],
+          "trick": [["S", "H-4"]], "led_suit": "H",
+          "played": [["S", "H-4"]], "tricks": [["NS", 0], ["WE", 0]]}}
+-> {"card": "H-Q", "worlds": 24, "ms": 14.2}
+```
+
+The view is the same object `env.View` gives an agent: that seat's hand, the legal cards, the trick
+in progress, every card played this hand, and the tricks so far. **Nothing else crosses the wire**,
+so a sidecar bug cannot leak another seat's hand — there is nothing to leak.
+
+Measured on this machine, 120 decisions against the heuristic's play:
+
+| worlds | p50 | p95 | max |
+|---|---|---|---|
+| 8 | 2.6 ms | 16.8 ms | 24.4 ms |
+| 24 | 6.8 ms | 49.7 ms | 65.9 ms |
+
+The browser CPU's think time is 620 ms, so there is roughly 10× headroom at 24 worlds.
+
+**Two failure modes the wiring exists to absorb.** A dead sidecar must not stall a table: the page
+falls back to its own heuristic on any error, timeout, 500, malformed body, or a card that is not
+legal for the seat. And the POST is cross-origin (the table is on 5173, the agent on 5200, and over a
+tunnel the table's origin is the tunnel's), so it is always preflighted — without `OPTIONS` handling
+and `Access-Control-Allow-Origin` the browser blocks it and the table falls back *silently*, which
+looks exactly like "the agent is not working". Both paths have tests: `tests/test_serve.py` covers
+the preflight and the validation, `src/ai/agent.test.js` in `professional-500` covers the fallbacks.
+
 ## Layout
 
 ```
@@ -173,6 +218,7 @@ src/fivehundred/bid.py        contracts, the 27-bid ladder, nullo and open nullo
 src/fivehundred/auction.py    the bidding round: turn order, legality, contract or thrown in
 src/fivehundred/scoring.py    contract made/defeated, slams, nullo, match to 500
 src/fivehundred/game.py       a whole hand (kitty exchange included) and a whole match
+src/fivehundred/serve.py      the search agent behind HTTP, for the browser table
 src/fivehundred/env.py        play-phase simulator; resumable mid-trick
 src/fivehundred/agents.py     random / lowest-card / the shipped heuristic (ported from cpu.js)
 src/fivehundred/features.py   148-number encoding of a seat's view (no peeking)

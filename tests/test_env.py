@@ -71,6 +71,25 @@ def test_an_illegal_play_is_refused_rather_than_silently_accepted():
         play_hand(dealt, "H", contractor="S", agents={s: Cheat() for s in SEATS})
 
 
+def test_an_empty_or_partial_trick_count_is_not_an_error():
+    """The first lead of a hand has no tricks yet, and `serve.py` accepts an empty list.
+
+    Replacing the score table with the caller's dict made `tricks={}` (or only
+    one team) raise KeyError on the first winner — a 500 on a legal request.
+    """
+    from fivehundred.agents import HeuristicAgent
+
+    rng = random.Random(4)
+    hands, _ = deal(rng)
+    dealt = {seat: hands[i] for i, seat in enumerate(SEATS)}
+
+    for tricks in ({}, {"NS": 0, "WE": 0}, {"NS": 3}):
+        out = play_hand(dealt, "H", "S", {s: HeuristicAgent() for s in SEATS}, tricks=dict(tricks))
+        # The hand plays ten more tricks on top of whatever was already counted.
+        assert sum(out.tricks.values()) == 10 + sum(tricks.values()), f"tricks={tricks} lost accounting"
+        assert set(out.tricks) == {"NS", "WE"}
+
+
 def test_identical_agents_are_unbiased_in_the_paired_benchmark():
     """The harness's own unit test: A vs A must come out at zero.
 

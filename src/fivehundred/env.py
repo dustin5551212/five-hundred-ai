@@ -91,7 +91,12 @@ def play_hand(
     remaining: dict[str, list[Card]] = {seat: list(cards) for seat, cards in hands.items()}
     order = play_order(contract, contractor)
     trick_size = len(order)
-    totals = {"NS": 0, "WE": 0} if tricks is None else {k: int(v) for k, v in tricks.items()}
+    # A caller may pass a partial or empty trick count — the first lead of a hand
+    # has none, and the wire format allows it. Merge onto a zeroed table rather
+    # than replacing it, or the first team lookup raises KeyError.
+    totals = {"NS": 0, "WE": 0}
+    if tricks:
+        totals.update({k: int(v) for k, v in tricks.items()})
     played_log: list[tuple[str, Card]] = list(log or ())
     current: list[tuple[str, Card]] = list(trick or ())
 

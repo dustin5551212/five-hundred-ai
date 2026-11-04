@@ -80,6 +80,20 @@ def no_safety_bidder(seat: str, hand: Sequence[Card], current: Bid | None) -> Bi
     return choose_bid(hand, current, safety=0.0)
 
 
+#: The margin the retune picked: bids at the edge rather than a level higher.
+EDGE_SAFETY = -0.5
+
+
+def edge_bidder(seat: str, hand: Sequence[Card], current: Bid | None) -> Bid | None:
+    """The shipped estimate, bidding at the edge.
+
+    The sweep found this the best arm against *both* defences on contract value,
+    but it was never measured at a table — where the defenders score ten a trick
+    for every contract you fail. That gap is why it exists here.
+    """
+    return choose_bid(hand, current, safety=EDGE_SAFETY)
+
+
 def gambler_bidder(seat: str, hand: Sequence[Card], current: Bid | None) -> Bid | None:
     """The shipped estimate, but willing to bid one trick past what it counts."""
     return choose_bid(hand, current, partner_help=2.2, kitty_help=1.3, safety=-1.0)
@@ -501,6 +515,7 @@ def run_sweep(args) -> int:
     for label, a, b in [
         ("shipped vs shipped (control)", cpu_bidder, cpu_bidder),
         ("no safety margin vs shipped", no_safety_bidder, cpu_bidder),
+        ("bids at the edge (-0.5) vs shipped", edge_bidder, cpu_bidder),
         ("one trick higher vs shipped", gambler_bidder, cpu_bidder),
     ]:
         r = pair_benchmark(label, a, b, args.sweep_deals, args.seed, defence=args.strong)
@@ -543,6 +558,7 @@ def main(argv: list[str] | None = None) -> int:
         "always 6 Spades": fixed_bidder(6, "S"),
         "shipped CPU": cpu_bidder,
         "shipped, no safety margin": no_safety_bidder,
+        "shipped, bids at the edge (-0.5)": edge_bidder,
         "shipped, 1 trick higher": gambler_bidder,
     }
 

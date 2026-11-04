@@ -15,14 +15,40 @@ import pytest
 from fivehundred.bid import NULLO, Bid
 from fivehundred.bidbench import (
     contract_benchmark,
+    edge_bidder,
     evaluate_contract,
     fixed_bidder,
+    no_safety_bidder,
     pair_benchmark,
     pass_bidder,
 )
 from fivehundred.cards import Card, deal
 from fivehundred.game import LETTER, cpu_bidder, deal_hand
 from fivehundred.auction import SEATS
+
+
+def test_the_shipped_bid_margin_is_a_decision_not_a_leftover():
+    """0.2 stays, because the aggressive arms only pay against a defence that does not fight.
+
+    Measured on 250 paired deals, seed 21: bidding at the edge (safety −0.5) is
+    worth +10.68 points a hand in *contract value* (CI [+5.68, +15.76]) but only
+    +1.32 at a table against a searching defence (CI [−12.76, +16.00]). One trick
+    higher is +12.08 in contract value and −7.24 at the table. A contract-value
+    gain that evaporates when the defenders are paid for your failures is not a
+    gain, so the shipped margin does not move. Changing it needs a *table-level*
+    result, not a contract-value one.
+    """
+    import inspect
+
+    from fivehundred.agents import choose_bid
+
+    assert inspect.signature(choose_bid).parameters["safety"].default == 0.2
+
+
+def test_the_aggressive_arms_are_still_wired_so_the_question_can_be_reopened():
+    """The arms that lost stay in the harness: reopening the question must be cheap."""
+    assert edge_bidder is not no_safety_bidder
+    assert edge_bidder.__doc__ and "at the edge" in edge_bidder.__doc__
 
 
 def test_the_control_arm_differs_from_itself_by_exactly_nothing():

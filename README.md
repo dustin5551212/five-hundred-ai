@@ -17,8 +17,10 @@ The shipped heuristic is worth **+1.56 tricks a hand over random play**. Search 
 **+0.98**. The learned policy, on its own, does not beat it yet.
 
 Its *bidding* is worth **+17 points a hand over never bidding**, and it beats a no-judgement 6♠
-bidder by **+60 points a hand at a real table** — but it **underbids**, and letting it bid one trick
-higher is worth another **+18** (contract value) or **+25** (at the table), on 2,000 paired deals.
+bidder by **+60 points a hand at a real table**. It also *looks* like it underbids: bidding at the
+edge is worth **+10.68** points a hand in contract value. That gain **does not survive a defence
+that fights** — at a table against a searching defence it is **+1.32**, with an interval 28 points
+wide — so the shipped margin did not move. The full argument is in *Is the CPU any good at bidding?*
 
 | agent | vs heuristic (tricks/hand) | 95% CI | deals | what it is |
 |---|---|---|---|---|
@@ -31,7 +33,7 @@ higher is worth another **+18** (contract value) or **+25** (at the table), on 2
 | heuristic vs itself | 0.00 | exactly 0 | 2,000 | the harness's control |
 
 Numbers use seeds 7 (baselines) and 21 (agents), on different deal counts, so compare intervals
-rather than the last decimal. `pytest` — **116 passed**.
+rather than the last decimal. `pytest` — **118 passed**.
 
 ## Benchmark design
 
@@ -149,7 +151,7 @@ would be a category error.
 ```sh
 uv venv --python 3.12 .venv
 uv pip install --python .venv/bin/python pytest numpy
-.venv/bin/python -m pytest -q                                     # 116 passed
+.venv/bin/python -m pytest -q                                     # 118 passed
 
 PYTHONPATH=src .venv/bin/python -m fivehundred.benchmark --deals 2000 --seed 7 \
     --json benchmarks/baseline.json
@@ -228,7 +230,7 @@ src/fivehundred/search.py     PIMC: sampled worlds, common random numbers, rollo
 src/fivehundred/benchmark.py  paired head-to-head with bootstrap intervals
 scripts/diagnose_bc.py        where the cloned policy disagrees with its teacher, by decision type
 scripts/dump_js_parity.mjs    asks the browser game the same questions, for the parity fixture
-tests/                       116 tests — rules, bidding, auction, scoring, a whole match, the bidding
+tests/                       118 tests — rules, bidding, auction, scoring, a whole match, the bidding
                               benchmark and its defence harness, search, and the parity suite
 ```
 
@@ -306,17 +308,27 @@ arm, so the difference between arms is the bid and nothing else:
 | −1.0 (one trick higher) | +35.44 | +32.36 | **+12.08** | [+5.52, +18.96] | 78 / 76% | 23.2% |
 | −1.5 | +35.96 | +31.60 | +11.32 | [+3.40, +19.32] | 73 / 70% | 7.6% |
 
-And at a real table, both sides' points counted, with the searcher defending:
+And at a real table, both sides' points counted. Every cell below is one setting — 250 paired deals,
+seed 21, sides swapped — so the only thing varying across a row is the bid margin. The
+heuristic-defence column was re-measured with the edge arm; the earlier version of it did not
+reproduce and has been replaced rather than kept as decoration.
 
-| matchup | A − B, searching defence | 95% CI | A − B, heuristic defence (for contrast) |
-|---|---|---|---|
-| shipped vs shipped (control) | 0.00 | exactly 0 | 0.00 |
-| no safety margin vs shipped | **+3.68** | [−2.08, +9.16] | +6.40 [+4.11, +8.72] |
-| one trick higher vs shipped | **−7.24** | [−29.08, +14.48] | +25.30 [+18.21, +32.05] |
+| matchup | A − B, searching defence | 95% CI | A − B, heuristic defence | 95% CI |
+|---|---|---|---|---|
+| shipped vs shipped (control) | 0.00 | exactly 0 | 0.00 | exactly 0 |
+| no safety margin vs shipped | **+3.68** | [−2.08, +9.16] | +8.32 | [+3.96, +12.76] |
+| bids at the edge (−0.5) vs shipped | **+1.32** | [−12.76, +16.00] | +12.72 | [+0.00, +25.48] |
+| one trick higher vs shipped | **−7.24** | [−29.08, +14.48] | +16.76 | [−3.20, +36.32] |
+
+Read the two columns together and the whole finding falls out: **aggressive bidding pays only while
+the defenders are not trying.** Against the shipped heuristic every aggressive arm gains; against a
+defence that searches, the edge arm collapses to +1.32 and one-trick-higher goes negative. The
+point estimate does not even order the arms the same way in both columns, which is what noise looks
+like when it is mistaken for a result.
 
 **What survives, and what doesn't.** The searching defence costs every arm points, and it costs the
 aggressive ones more (−0.5 at the timid end, −4.4 at the far end) — the shape you would expect if the
-defence is doing its job. Two claims come out of the retune with different verdicts:
+defence is doing its job. Three verdicts come out of the retune:
 
 - **"Remove the safety margin" survives.** Bidding at the edge is worth **+3.96** a hand in contract
   value with the interval clear of zero, and **+10.68** if you take the −0.5 setting, which is the
@@ -327,11 +339,29 @@ defence is doing its job. Two claims come out of the retune with different verdi
   not finding better contracts, it was farming a defence that does not fight, and 83% of the hands it
   won the auction for were hands it then had to make.
 
-So the honest version of the first finding is narrower than "the CPU underbids by a trick": it
-**bids too little, and the fix is to bid at the edge rather than a level higher**. The gap between
-the shipped margin and the best arm is about **10 points a hand when you are the side choosing the
-contract**, and about **4 points at a table, against a defence of this strength** — inside the noise
-at 250 deals.
+So the honest version of the first finding is narrower than "the CPU underbids by a trick" — and, now
+that the edge arm has actually been played at a table, narrower again:
+
+- **"Remove the safety margin" is real in contract value and unproven at a table.** At 0.0 it is
+  **+3.96** a hand with the interval clear of zero; at −0.5 it is **+10.68**, the best arm against
+  both defences. But a table pays the defenders ten a trick for every contract you fail, and there
+  the same arms read **+3.68** [−2.08, +9.16] and **+1.32** [−12.76, +16.00]. The −0.5 arm has the
+  higher contract value *and* the worse table row, which is the clearest possible statement that the
+  two metrics are not interchangeable.
+- **"Bid a trick higher" does not.** Against the heuristic defence it looked worth **+16 to +25** a
+  hand at the table; against a defence that searches it is **−7.24**, interval spanning zero. That
+  arm was not finding better contracts, it was farming a defence that does not fight, and 83% of the
+  hands it won the auction for were hands it then had to make.
+- **So no margin ships.** The shipped 0.2 stays, and a test pins it with this reasoning attached, so
+  moving it later has to be a deliberate act backed by a table-level result rather than a
+  contract-value one. Reopening the question is cheap: `edge_bidder` and the rest of the arms are
+  still wired into the harness.
+
+The gap the earlier version of this section reported — "about 10 points a hand, about 4 at a table" —
+was written before the edge arm had ever defended against anything but the heuristic. It was the
+contract-value number wearing a table's clothes. What the evidence supports is smaller and duller:
+**the CPU bids conservatively, and conservative bidding costs little against opposition that is
+actually trying to beat it.**
 
 Caveats worth keeping: 250 deals rather than 2,000, because the searcher costs ~120 ms a hand; PIMC-12
 is a competent defender but its rollouts still use the shipped heuristic as the base policy; and it

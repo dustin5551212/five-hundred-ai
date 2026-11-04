@@ -3,13 +3,17 @@
 A Python implementation of **500** — the 45-card trick-taking game — with a benchmark harness and
 three agents to measure: a learned policy, a searcher, and the hand-tuned CPU from my browser game.
 
+**Start here:** `pip install pytest && pytest -q` — 118 tests, no PyTorch needed, about 6 seconds.
+The learned-policy and search sections below say what each one is worth, including the two
+experiments that failed.
+
 The game itself is complete: deal, auction, kitty exchange, ten tricks, contract scoring and a match
 to 500 points. `python -m fivehundred --seed 7` plays one out at the terminal. Both halves are
 measured too — card play in tricks, and bidding in points (see *Is the CPU any good at bidding?*).
 
-This is the companion to [professional-500](https://github.com/dustin5551212/professional-500)
-(zero dependencies, 112 tests, 4-player networked). That game ships a rule-based opponent in
-`src/cpu.js`. This repo exists to find out how good it is, and to beat it.
+This is the companion to a browser game I wrote — 4-player networked, zero dependencies, 112 tests
+in its own suite, currently a private repo. That game ships a rule-based opponent in `src/cpu.js`.
+This repo exists to find out how good it is, and to beat it.
 
 ## The result
 

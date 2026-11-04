@@ -31,7 +31,7 @@ higher is worth another **+18** (contract value) or **+25** (at the table), on 2
 | heuristic vs itself | 0.00 | exactly 0 | 2,000 | the harness's control |
 
 Numbers use seeds 7 (baselines) and 21 (agents), on different deal counts, so compare intervals
-rather than the last decimal. `pytest` — **36 passed**.
+rather than the last decimal. `pytest` — **116 passed**.
 
 ## Benchmark design
 
@@ -149,7 +149,7 @@ would be a category error.
 ```sh
 uv venv --python 3.12 .venv
 uv pip install --python .venv/bin/python pytest numpy
-.venv/bin/python -m pytest -q                                     # 36 passed
+.venv/bin/python -m pytest -q                                     # 116 passed
 
 PYTHONPATH=src .venv/bin/python -m fivehundred.benchmark --deals 2000 --seed 7 \
     --json benchmarks/baseline.json
@@ -228,7 +228,7 @@ src/fivehundred/search.py     PIMC: sampled worlds, common random numbers, rollo
 src/fivehundred/benchmark.py  paired head-to-head with bootstrap intervals
 scripts/diagnose_bc.py        where the cloned policy disagrees with its teacher, by decision type
 scripts/dump_js_parity.mjs    asks the browser game the same questions, for the parity fixture
-tests/                        100 tests — rules, bidding, auction, scoring, a whole match, the bidding
+tests/                       116 tests — rules, bidding, auction, scoring, a whole match, the bidding
                               benchmark and its defence harness, search, and the parity suite
 ```
 
@@ -363,5 +363,7 @@ the join did not double-count.
    the worlds needed for the same strength. That is where learning and search stop competing.
 3. ~~**Auction + kitty**~~ — done: `bid.py`, `auction.py`, `game.py`, and `bidbench.py` to measure
    the result. The benchmark's first finding is that the shipped CPU underbids by about a trick.
-4. **Ship it** — export a policy and give it a seat in the browser game, so the agent is playable at
-   the table instead of a row in a table.
+4. ~~**Ship it**~~ — done for search: `serve.py` exposes `/move` over HTTP and the browser game seats
+   it with `?ai=1`, or `?ai=http://host:port` for the served agent, falling back to the built-in CPU
+   if the agent offers an illegal card. Still open for a *learned* policy, which has nothing worth
+   exporting yet.

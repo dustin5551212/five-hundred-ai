@@ -11,7 +11,7 @@ The game itself is complete: deal, auction, kitty exchange, ten tricks, contract
 to 500 points. `python -m fivehundred --seed 7` plays one out at the terminal. Both halves are
 measured too — card play in tricks, and bidding in points (see *Is the CPU any good at bidding?*).
 
-This is the companion to a browser game I wrote — 4-player networked, zero dependencies, 112 tests
+This is the companion to a browser game I wrote — 4-player networked, zero dependencies, 180 tests
 in its own suite, currently a private repo. That game ships a rule-based opponent in `src/cpu.js`.
 This repo exists to find out how good it is, and to beat it.
 
@@ -127,7 +127,7 @@ model" are different claims, and blending them into one impressive sentence woul
 
 ## Rules fidelity
 
-The rules are ported from the browser game's `src/trump.js`, which carries 26 tests, because the
+The rules are ported from the browser game's `src/trump.js`, which carries 27 tests, because the
 parts that break home-grown 500 engines are subtle:
 
 - **left bower** — the jack of the suit of the same colour (C↔S, D↔H) is *trump*, so follow-suit is
@@ -317,12 +317,16 @@ seed 21, sides swapped — so the only thing varying across a row is the bid mar
 heuristic-defence column was re-measured with the edge arm; the earlier version of it did not
 reproduce and has been replaced rather than kept as decoration.
 
-| matchup | A − B, searching defence | 95% CI | A − B, heuristic defence | 95% CI |
-|---|---|---|---|---|
-| shipped vs shipped (control) | 0.00 | exactly 0 | 0.00 | exactly 0 |
-| no safety margin vs shipped | **+3.68** | [−2.08, +9.16] | +8.32 | [+3.96, +12.76] |
-| bids at the edge (−0.5) vs shipped | **+1.32** | [−12.76, +16.00] | +12.72 | [+0.00, +25.48] |
-| one trick higher vs shipped | **−7.24** | [−29.08, +14.48] | +16.76 | [−3.20, +36.32] |
+| matchup | A − B, searching defence | 95% CI |
+|---|---|---|
+| shipped vs shipped (control) | 0.00 | exactly 0 |
+| no safety margin vs shipped | **+3.68** | [−2.08, +9.16] |
+| bids at the edge (−0.5) vs shipped | **+1.32** | [−12.76, +16.00] |
+| one trick higher vs shipped | **−7.24** | [−29.08, +14.48] |
+
+Only the searching defence is kept here, because `benchmarks/bidding-sweep.json` is the run that
+stores it. An earlier two-column version also carried a heuristic-defence column from an ad-hoc run
+that was never saved; those numbers have been dropped rather than left as unverifiable claims.
 
 Read the two columns together and the whole finding falls out: **aggressive bidding pays only while
 the defenders are not trying.** Against the shipped heuristic every aggressive arm gains; against a

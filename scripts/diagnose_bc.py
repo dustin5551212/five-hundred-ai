@@ -3,6 +3,7 @@
 Held-out agreement plateaus near 90%. That 10% is not noise, so it is worth
 knowing which decisions it sits in: leading, following, contracting, defending.
 """
+import json
 import random
 import sys
 from collections import defaultdict
@@ -65,3 +66,15 @@ for key, (n, correct) in sorted(groups.items(), key=lambda kv: kv[1][1] / kv[1][
 r = run("bc", "learned:models/bc.pt", "heuristic", 400, 21)
 print(f"\nbc vs heuristic: A {r.a_tricks:.3f}  B {r.b_tricks:.3f}  diff {r.diff:+.3f}  "
       f"CI [{r.ci95[0]:+.2f},{r.ci95[1]:+.2f}]")
+
+# Stored, because the README quotes both the per-type agreement and the 0.45-trick
+# imitation cost: a number in prose has to come from somewhere on disk.
+out = {
+    "seed": 777,
+    "hands": 500,
+    "decisions": len(meta.samples),
+    "agreement": {k: {"n": n, "rate": round(c / n, 4)} for k, (n, c) in groups.items()},
+    "matchup": {"diff": round(r.diff, 3), "ci95": [round(x, 2) for x in r.ci95], "deals": r.deals},
+}
+json.dump(out, open("benchmarks/diagnose.json", "w"), indent=2)
+print("wrote benchmarks/diagnose.json")

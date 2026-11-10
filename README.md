@@ -3,7 +3,7 @@
 A Python implementation of **500** — the 45-card trick-taking game — with a benchmark harness and
 three agents to measure: a learned policy, a searcher, and the hand-tuned CPU from my browser game.
 
-**Start here:** `pip install pytest && pytest -q` — 118 tests, no PyTorch needed, about 6 seconds.
+**Start here:** `pip install pytest && pytest -q` — 119 tests, no PyTorch needed, about 6 seconds.
 The learned-policy and search sections below say what each one is worth, including the two
 experiments that failed.
 
@@ -37,7 +37,7 @@ wide — so the shipped margin did not move. The full argument is in *Is the CPU
 | heuristic vs itself | 0.00 | exactly 0 | 2,000 | the harness's control |
 
 Numbers use seeds 7 (baselines) and 21 (agents), on different deal counts, so compare intervals
-rather than the last decimal. `pytest` — **118 passed**.
+rather than the last decimal. `pytest` — **119 passed**.
 
 ## Benchmark design
 
@@ -155,7 +155,7 @@ would be a category error.
 ```sh
 uv venv --python 3.12 .venv
 uv pip install --python .venv/bin/python pytest numpy
-.venv/bin/python -m pytest -q                                     # 118 passed
+.venv/bin/python -m pytest -q                                     # 119 passed
 
 PYTHONPATH=src .venv/bin/python -m fivehundred.benchmark --deals 2000 --seed 7 \
     --json benchmarks/baseline.json
@@ -234,7 +234,7 @@ src/fivehundred/search.py     PIMC: sampled worlds, common random numbers, rollo
 src/fivehundred/benchmark.py  paired head-to-head with bootstrap intervals
 scripts/diagnose_bc.py        where the cloned policy disagrees with its teacher, by decision type
 scripts/dump_js_parity.mjs    asks the browser game the same questions, for the parity fixture
-tests/                       118 tests — rules, bidding, auction, scoring, a whole match, the bidding
+tests/                       119 tests — rules, bidding, auction, scoring, a whole match, the bidding
                               benchmark and its defence harness, search, and the parity suite
 ```
 
